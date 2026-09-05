@@ -25,11 +25,25 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Find Android Project
+        id: find_project
+        run: |
+          PROJECT_DIR=$(find . -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -print -quit | xargs dirname)
+          echo "Project found at: $PROJECT_DIR"
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
       - name: Build APK
-        run: gradle assembleDebug --stacktrace
+        run: |
+          cd "${{ steps.find_project.outputs.project_dir }}"
+          gradle assembleDebug --stacktrace
+
+      - name: Prepare APK
+        run: |
+          mkdir -p artifacts
+          cp "${{ steps.find_project.outputs.project_dir }}"/app/build/outputs/apk/debug/*.apk artifacts/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TechPremPro
-          path: app/build/outputs/apk/debug/*.apk
+          path: artifacts/*.apk
