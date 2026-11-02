@@ -1,4 +1,4 @@
-name: Build TechPremPro APK
+name: Build Fazlupur Weather Signed APK
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4 
+        uses: actions/checkout@v4
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -34,16 +34,40 @@ jobs:
       - name: Find Project
         run: |
           PROJECT_DIR=$(find extracted -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -print -quit | xargs -r dirname)
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Android project not found!"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Android project: $PROJECT_DIR"
 
-      - name: Build APK
+      - name: Configure Release Signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || (echo "Missing keystore secret" && exit 1)
+          test -n "$KEYSTORE_PASSWORD" || (echo "Missing keystore password" && exit 1)
+          test -n "$KEY_ALIAS" || (echo "Missing key alias" && exit 1)
+          test -n "$KEY_PASSWORD" || (echo "Missing key password" && exit 1)
+
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fazlupur-release.jks"
+
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/fazlupur-release.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build Signed Release APK
         run: |
           cd "$PROJECT_DIR"
-          gradle assembleDebug --stacktrace
+          gradle assembleRelease --stacktrace
 
-      - name: Upload APK
+      - name: Upload Signed Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: TechPremPro
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          name: FazlupurWeather-Signed-Release
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
